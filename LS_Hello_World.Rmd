@@ -1,8 +1,0 @@
----
-title: "Hello World"
-author: "Leah"
-date: "October 28, 2018"
-output: html_document
----
-Hello world.
-File for addition to my-first-repo for R assignment 2.
