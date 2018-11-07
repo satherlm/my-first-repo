@@ -1,0 +1,159 @@
+---
+title: "R_Assignment_3_LS"
+author: "Leah"
+date: "November 4, 2018"
+output: html_document
+---
+####Question 2####
+*Read in the .csv file (call it rna_counts). Write a function that calculates and can output mean expression (using the mean() function) for a given data column. Write this function so that it can work on either raw counts (as provided) or transformed to log2 values of the counts, with a logical argument that allows the user to choose whether to do this on the raw scale or log2 scale (i.e. log2 transform, then calculate the mean). Make sure all functions you write for this assignment have this argument. We often use log2 scale for RNAseq data. Demonstrate that it works on several of the columns of data.*
+```{r}
+rna_counts <- read.csv("C:/Users/Leah/Documents/Biol720/eXpress_dm_counts.csv")
+
+get_mean_expr <- function(x, log2_transform = FALSE) {
+  if (log2_transform == TRUE) {
+    x <- log2(x + 1) #adding small non-zero value to all values to prevent taking log2(0)
+  }
+  mean(x, na.rm = TRUE)
+}
+
+```
+To deal with the 0 values when transforming to log base 2, the function first adds 1 to all the values. This keeps the 0 values at 0 even when log2-transformed. This approach keeps the whole dataset intact and allows me to avoid dealing with NAs/missing values. 
+
+Testing the function:
+```{r}
+get_mean_expr(rna_counts$F101_lg_female_hdhorn)
+get_mean_expr(rna_counts[[6]])
+get_mean_expr(rna_counts$M160_lg_male_wings, log2_transform = TRUE)
+```
+
+####Question 3####
+*Now using the function you have written, use a loop to generate a vector of the mean expression value for each column (each sample). Make sure that your output vector have named elements (i.e. each element of the vector is associated with the names of the original columns of the data). Confirm that this function is giving you the correct answer based on what you found in question 2. Do you notice any patterns for which individuals or tissues have the highest mean expression?*
+```{r}
+mean_expr_vec <- numeric(length(rna_counts))
+names(mean_expr_vec) <- c(names(rna_counts))
+
+#Using [-1] here to skip first column
+for (i in seq_along(rna_counts)[-1]) {
+  mean_expr_vec[i] <- get_mean_expr(rna_counts[[i]])
+}
+#Removing first object in vector (corresponds to first column--non-numeric)
+mean_expr_vec <- mean_expr_vec[-1]
+str(mean_expr_vec)
+```
+
+Confirming that my vector contains means that match the previous answer:
+```{r}
+get_mean_expr(rna_counts$F101_lg_female_hdhorn) == mean_expr_vec["F101_lg_female_hdhorn"]
+get_mean_expr(rna_counts[[6]]) == mean_expr_vec[5]
+```
+
+Checking for any obvious patterns in highest mean expression:
+```{r}
+sort(mean_expr_vec)
+```
+Wings seem to have the highest mean expression. Indivuals M200 and M180 also have high mean expression.
+
+####Question 4####
+*Repeat this procedure (using the function you wrote, or slightly revised) that uses one of the apply family of functions to do the same as 3. Check which is faster (to compute not to write), and demonstrate how you did this.*
+
+Vapply method:
+```{r}
+mean_expr_vec2 <- numeric(length(rna_counts))
+names(mean_expr_vec2) <- c(names(rna_counts))
+mean_expr_vec2 <- mean_expr_vec2[-1]
+
+mean_expr_vec2 <- vapply(rna_counts[-1], get_mean_expr, FUN.VALUE = numeric(1))
+identical(mean_expr_vec, mean_expr_vec2)
+```
+
+Checking timing:
+```{r}
+#For loop method: 
+system.time(for (i in seq_along(rna_counts)[-1]) {
+  get_mean_expr(rna_counts[[i]])
+}) 
+
+#Vapply method:
+system.time(vapply(rna_counts[-1], get_mean_expr, FUN.VALUE = numeric(1)))
+```
+The vapply method is faster (0.01 elapsed vs 0.02 elapsed for the for loop).
+
+####Question 5####
+*What is a much easier way to do the operations we did in Q 3 and 4, (i.e. you don't need to write your own function) to calculate and output all of the column means? i.e. an Rish way of doing this?*
+
+```{r}
+q5test <- colMeans(rna_counts[-1], na.rm = TRUE)
+# or, if you want log2 transform:
+colMeans(log2(rna_counts[-1] + 0.000001), na.rm = TRUE)
+
+identical(q5test, mean_expr_vec2)
+```
+
+####Question 6####
+*It is common (say for a MAplot) to want the mean expression value of each given gene across all samples. Write a function to do this, and using one of the approaches from Q 3-5 generate and store these values in a variable.*
+```{r}
+get_row_mean_expr <- function(x, log2_transform = FALSE) {
+  if (log2_transform == TRUE) {
+    x <- log2(x + 0.000001) #adding small non-zero value to all values to prevent taking log2(0)
+  }
+  rowMeans(x, na.rm = TRUE)
+}
+by_gene_expr <- numeric(nrow(rna_counts))
+by_gene_expr <- get_row_mean_expr(rna_counts[, -1])
+
+names(by_gene_expr) <- rna_counts[,1] # For some reason, calling the function deleted the names, so am assigning names afterwards
+str(by_gene_expr)
+```
+
+####Question 7####
+*We are very interested in what is going on in the head horns between small males and large males. Using the type of tools you have written (feel free to modify as you need, but show the new functions) calculate the mean expression for the subset of columns for large and small male head horns. Note you are calculating means on a gene by gene basis, NOT sample by sample. Now calculate the mean difference (again gene by gene) between large male and small males (for head horns). i.e. first calculate the mean expression among individuals who are large males (head horns), ditto for the small males, and calculate their difference.*
+
+```{r}
+#Mean expression by gene in all male head horns
+male_hdhorns <- grep("_male_hdhorn", names(rna_counts))
+
+m_hdhorns_by_gene <- numeric(nrow(rna_counts))
+m_hdhorns_by_gene <- get_row_mean_expr(rna_counts[, male_hdhorns])
+names(m_hdhorns_by_gene) <- rna_counts[,1]
+
+str(m_hdhorns_by_gene)
+
+#Mean expression by gene in small male head horns
+sm_male_hdhorns <- grep("sm_male_hdhorn", names(rna_counts))
+
+sm_m_hdhorns_by_gene <- numeric(nrow(rna_counts))
+sm_m_hdhorns_by_gene <- get_row_mean_expr(rna_counts[, sm_male_hdhorns])
+names(sm_m_hdhorns_by_gene) <- rna_counts[,1]
+
+#Mean expression by gene in large male head horns
+lg_male_hdhorns <- grep("lg_male_hdhorn", names(rna_counts))
+
+lg_m_hdhorns_by_gene <- numeric(nrow(rna_counts))
+lg_m_hdhorns_by_gene <- get_row_mean_expr((rna_counts[, lg_male_hdhorns]))
+names(lg_m_hdhorns_by_gene) <- rna_counts[,1]
+
+str(sm_m_hdhorns_by_gene)
+str(lg_m_hdhorns_by_gene)
+
+#Mean difference between large and small
+hdhorn_diff <- numeric(nrow(rna_counts))
+hdhorn_diff <- lg_m_hdhorns_by_gene - sm_m_hdhorns_by_gene
+str(hdhorn_diff)
+```
+
+####Question 8####
+*Using the basic plot function (although you can use ggplot2 if you prefer), plot the mean expression of each gene on the X axis, and the difference in expression values on the Y axis. Now repeat, but with log2 transformed data. This is the basic idea of a MAplot.*
+```{r}
+#Question 8
+plot(m_hdhorns_by_gene, hdhorn_diff, main = "Difference vs mean expression: large and small male headhorns", xlab = "Mean male headhorn expression", ylab = "Difference in expression (large and small)")
+
+#Need to do this with log2 transformed data as well
+#Lazy method (no names, no pre-allocation)
+m_hdhorns_log2 <- get_row_mean_expr(rna_counts[, male_hdhorns], TRUE)
+lg_m_hdhorns_log2 <- get_row_mean_expr(rna_counts[, lg_male_hdhorns], TRUE)
+sm_m_hdhorns_log2 <- get_row_mean_expr(rna_counts[, sm_male_hdhorns], TRUE)
+hdhorn_diff_log2 <- lg_m_hdhorns_log2 - sm_m_hdhorns_log2
+
+plot(m_hdhorns_log2, hdhorn_diff_log2, main = "Difference vs mean headhorn expression: Log2 Transformed", xlab = "Mean male headhorn expression (log2)", ylab = "Difference in expression (large and small) (log2)")
+```
+
